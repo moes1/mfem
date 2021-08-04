@@ -12,6 +12,7 @@ class Runner(object):
     self.setuptime = {}
     self.solvetime = {}
     self.itercount = {}
+    self.jval = ' '.join(self.argList).partition('--jacobi-value')[2].split()[0]
     return
 
   def parseOutput(self,out,device,smoother):
@@ -70,19 +71,20 @@ class Runner(object):
       'setuptime' : self.setuptime,
       'solvetime' : self.solvetime,
       'itercount' : self.itercount,
+      'jval'      : self.jval,
       'elemcount' : self.elems,
       'arglist'   : self.argList,
     }
 
 
-def main(exe,ordRange,refine,mesh,outFile):
+def main(exe,ordRange,refine,mesh,outFile,jacobiVal):
   assert os.path.exists(exe), 'Could not find {}'.format(exe)
   assert os.path.exists(mesh), 'Could not find {}'.format(mesh)
 
   results = {}
   try:
     for order in ordRange:
-      runner = Runner(exe,'-o',str(order),'-r',str(refine),'--mesh',mesh)
+      runner = Runner(exe,'--order',str(order),'--refine',str(refine),'--mesh',mesh,'--jacobi-value',str(jacobiVal))
       runner.run()
       results[order] = runner.get()
   except AssertionError as ae:
@@ -101,19 +103,20 @@ def main(exe,ordRange,refine,mesh,outFile):
 if __name__ == '__main__':
   import argparse
 
-  defaultOutput = 'output_o{ordmin}_{ordmax}_r{refine}.json'
+  defaultOutput = 'output_o{ordmin}_{ordmax}_r{refine}_j{jval}.json'
   parser = argparse.ArgumentParser(description='Collect timing results for DRSmoothers',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('exec',help='path to example to time')
-  parser.add_argument('-o','--order-range',metavar='int',default=[4,7],type=int,nargs=2,dest='ordrange')
+  parser.add_argument('-o','--order-range',metavar='int',default=[4,13],type=int,nargs=2,dest='ordrange')
   parser.add_argument('-r','--refine',metavar='int',default=0,type=int,dest='refine')
-  parser.add_argument('-m','--mesh',default='../data/inline-hex.mesh')
+  parser.add_argument('-m','--mesh',default='../data/star.mesh')
   parser.add_argument('-t','--target',default=defaultOutput,help='path to output file')
+  parser.add_argument('-jv','--jacobi-value',default=0.666,type=float,help='Jacobi smoother value',dest='jv')
   args = parser.parse_args()
 
   if args.target == defaultOutput:
-    args.target = args.target.format(ordmin=args.ordrange[0],ordmax=args.ordrange[1],refine=args.refine)
+    args.target = args.target.format(ordmin=args.ordrange[0],ordmax=args.ordrange[1],refine=args.refine,jval=str(args.jv).replace('.','_'))
 
   if not args.target.endswith('.json'):
     args.target += '.json'
 
-  main(os.path.abspath(args.exec),range(*args.ordrange),args.refine,os.path.abspath(args.mesh),os.path.abspath(args.target))
+  main(os.path.abspath(args.exec),range(*args.ordrange),args.refine,os.path.abspath(args.mesh),os.path.abspath(args.target),args.jv)

@@ -9,11 +9,12 @@ struct _b_UserCtx
    Mesh              mesh;
    const std::string smootherType,solverType,amgConfig;
    const int         order,refine;
+   const double      jacobiVal;
 
    _b_UserCtx(const char *dev,const char *file, const char *smoother,
-              const char *solver, const char *amg, int ord,int ref) :
+              const char *solver, const char *amg, int ord, int ref, double jacobi) :
      device(dev),mesh(file,1,1),smootherType(smoother),solverType(solver),amgConfig(amg),
-     order(ord),refine(ref)
+     order(ord),refine(ref),jacobiVal(jacobi)
    {
       for (int i = 0; i < ref; ++i) { mesh.UniformRefinement(); }
       device.Print();
@@ -111,7 +112,8 @@ static UserCtx ParseCommandLineOptions(int argc, char *argv[])
    const char *solver   = "amgx";
    const char *device   = "cuda";
    const char *amg      = "amgx.json";
-   int        nRefine = 1, order = 4;
+   int        nRefine   = 1, order = 4;
+   double     jacobiVal = 0.6666;
    OptionsParser args(argc,argv);
 
    args.AddOption(&device, "-d", "--device",
@@ -122,11 +124,12 @@ static UserCtx ParseCommandLineOptions(int argc, char *argv[])
    args.AddOption(&solver,"-S","--solver","Which solver to use (either direct, simpleamg, or amgx");
    args.AddOption(&amg,"-A","--amg-config","Path to amg config file, if using amgx");
    args.AddOption(&order,"-o","--order","Polynomial degree");
+   args.AddOption(&jacobiVal,"-jv","--jacobi-value","Jacobi smoother value");
    args.AddOption(&nRefine,"-r","--refine",
                   "Number of times to refine the mesh uniformly");
    args.ParseCheck();
 
-   return UserCtx{new _b_UserCtx{device,meshFile,smoother,solver,amg,order,nRefine}};
+   return UserCtx{new _b_UserCtx{device,meshFile,smoother,solver,amg,order,nRefine,jacobiVal}};
 }
 
 int main(int argc, char *argv[])
@@ -178,7 +181,7 @@ int main(int argc, char *argv[])
    } else if (ctx->smootherType == "GS") {
      smoother.reset(new GSSmoother(ALor));
    } else if (ctx->smootherType == "J") {
-     smoother.reset(new DSmoother(ALor));
+     smoother.reset(new DSmoother(ALor,0,ctx->jacobiVal));
    } else {
      MFEM_ABORT("Unknown smoother type "<<ctx->smootherType);
    }
