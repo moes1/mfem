@@ -36,18 +36,28 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
    auto Y = Reshape(y_, ndofs);
    auto Y1 = Reshape(y_, D1D,D1D,D1D, NE);
 
-   MFEM_FORALL_3D(e, NE, Q1D, Q1D, 1,
+   constexpr int blocks=1+6*(Q1D==6);
+   const int grid = (NE-1)/blocks+1;
+
+   MFEM_FORALL_3D(e1, grid, Q1D, Q1D, blocks,
    {
       double r_wk[Q1D];
-      MFEM_SHARED double s_B[Q1D][D1D];
-      MFEM_SHARED double s_q[Q1D][Q1D][Q1D];
+      MFEM_SHARED double s_B[Q1D][D1D][blocks];
+      MFEM_SHARED double s_q[Q1D][Q1D][Q1D][blocks];
+
+      int idz=MFEM_THREAD_ID(z);
+      int chunk = idz;
+      int e = blocks*e1 + chunk;
+
+      if(e < NE)
+      {
 
       // Load s_B, load X in shared memory
       MFEM_FOREACH_THREAD(b,y,Q1D)
       {
          MFEM_FOREACH_THREAD(a,x,Q1D)
          {
-            if (a<D1D) { s_B[b][a] = B(b,a); }
+            if (a<D1D) { s_B[b][a][chunk] = B(b,a); }
 
             MFEM_UNROLL(Q1D)
             for (int i=0; i<Q1D; ++i) { r_wk[i] = 0.0; }
@@ -59,7 +69,7 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
                {
                   const int gid = map ? MAP(a,b,c,e) : 0;
                   const int idx = gid >= 0 ? gid : -1 - gid;
-                  s_q[c][b][a] = map ? X(idx) : X1(a,b,c,e);
+                  s_q[c][b][a][chunk] = map ? X(idx) : X1(a,b,c,e);
                }
             }
          }
@@ -76,13 +86,13 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
                MFEM_UNROLL(D1D)
                for (int a=0; a<D1D; ++a)
                {
-                  const double q_cba = s_q[c][b][a];
+                  const double q_cba = s_q[c][b][a][chunk];
                   MFEM_UNROLL(Q1D)
-                  for (int i=0; i<Q1D; ++i) { r_wk[i] += s_B[i][a]*q_cba; }
+                  for (int i=0; i<Q1D; ++i) { r_wk[i] += s_B[i][a][chunk]*q_cba; }
                }
                // reg => s_mem
                MFEM_UNROLL(Q1D)
-               for (int i=0; i<Q1D; ++i) { s_q[c][b][i] = r_wk[i]; }
+               for (int i=0; i<Q1D; ++i) { s_q[c][b][i][chunk] = r_wk[i]; }
             }
             MFEM_UNROLL(Q1D)
             for (int j=0; j<Q1D; ++j) { r_wk[j] = 0.0; }
@@ -100,12 +110,12 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
                MFEM_UNROLL(D1D)
                for (int b=0; b<D1D; ++b)
                {
-                  const double q_cbi = s_q[c][b][i];
+                  const double q_cbi = s_q[c][b][i][chunk];
                   MFEM_UNROLL(Q1D)
-                  for (int j=0; j<Q1D; ++j) { r_wk[j] += s_B[j][b]*q_cbi; }
+                  for (int j=0; j<Q1D; ++j) { r_wk[j] += s_B[j][b][chunk]*q_cbi; }
                }
                MFEM_UNROLL(Q1D)
-               for (int j=0; j<Q1D; ++j) { s_q[c][j][i] = r_wk[j]; }
+               for (int j=0; j<Q1D; ++j) { s_q[c][j][i][chunk] = r_wk[j]; }
             }
             MFEM_UNROLL(Q1D)
             for (int k=0; k<Q1D; ++k) { r_wk[k] = 0.0; }
@@ -121,9 +131,9 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
             MFEM_UNROLL(D1D)
             for (int c=0; c<D1D; ++c)
             {
-               const double q_cji = s_q[c][j][i];
+               const double q_cji = s_q[c][j][i][chunk];
                MFEM_UNROLL(Q1D)
-               for (int k=0; k<Q1D; ++k) { r_wk[k] += s_B[k][c]*q_cji; }
+               for (int k=0; k<Q1D; ++k) { r_wk[k] += s_B[k][c][chunk]*q_cji; }
             }
 
             // Scale by Jacobian and integration weights
@@ -136,8 +146,8 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
             {
                double q_cji = 0.0;
                MFEM_UNROLL(Q1D)
-               for (int k=0; k<Q1D; ++k) { q_cji += s_B[k][c] * r_wk[k]; }
-               s_q[c][j][i] = q_cji;
+               for (int k=0; k<Q1D; ++k) { q_cji += s_B[k][c][chunk] * r_wk[k]; }
+               s_q[c][j][i][chunk] = q_cji;
             }
          }
       }
@@ -149,14 +159,14 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
          MFEM_FOREACH_THREAD(i,x,Q1D)
          {
             MFEM_UNROLL(Q1D)
-            for (int j=0; j<Q1D; ++j) { r_wk[j] = s_q[c][j][i]; }
+            for (int j=0; j<Q1D; ++j) { r_wk[j] = s_q[c][j][i][chunk]; }
             MFEM_UNROLL(D1D)
             for (int b=0; b<D1D; ++b)
             {
                double q_cbi = 0.0;
                MFEM_UNROLL(Q1D)
-               for (int j=0; j<Q1D; ++j) { q_cbi += s_B[j][b] * r_wk[j]; }
-               s_q[c][b][i] = q_cbi;
+               for (int j=0; j<Q1D; ++j) { q_cbi += s_B[j][b][chunk] * r_wk[j]; }
+               s_q[c][b][i][chunk] = q_cbi;
             }
          }
       }
@@ -168,14 +178,14 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
          MFEM_FOREACH_THREAD(b,x,D1D)
          {
             MFEM_UNROLL(Q1D)
-            for (int i=0; i<Q1D; ++i) { r_wk[i] = s_q[c][b][i]; }
+            for (int i=0; i<Q1D; ++i) { r_wk[i] = s_q[c][b][i][chunk]; }
             MFEM_UNROLL(D1D)
             for (int a=0; a<D1D; ++a)
             {
                double q_cba = 0.0;
                MFEM_UNROLL(Q1D)
-               for (int i=0; i<Q1D; ++i) { q_cba += s_B[i][a] * r_wk[i]; }
-               s_q[c][b][a] = q_cba;
+               for (int i=0; i<Q1D; ++i) { q_cba += s_B[i][a][chunk] * r_wk[i]; }
+               s_q[c][b][a][chunk] = q_cba;
             }
          }
       }
@@ -189,7 +199,7 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
             MFEM_UNROLL(D1D)
             for (int c=0; c<D1D; ++c)
             {
-               const double q_cba = s_q[c][b][a];
+               const double q_cba = s_q[c][b][a][chunk];
                const int gid = map ? MAP(a,b,c,e) : 0;
                const int idx = gid >= 0 ? gid : -1 - gid;
                AtomicAdd(map?Y(idx):Y1(a,b,c,e), q_cba);
@@ -197,6 +207,7 @@ void NDK_AMD_PAMassApply3D(const int ndofs,
          }
       }
       MFEM_SYNC_THREAD;
+   }
    });
 }
 
