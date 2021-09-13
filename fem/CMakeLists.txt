@@ -32,7 +32,6 @@ set(SRCS
   bilininteg_mass_pa_diag.cpp
   bilininteg_mass_pa_fast.cpp
   bilininteg_mass_pa_fast_amd.cpp
-  bilininteg_mass_pa_fast_dmz.cpp
   bilininteg_mass_pa_fast_diag.cpp
   bilininteg_mass_ea.cpp
   bilininteg_transpose_ea.cpp
@@ -44,6 +43,7 @@ set(SRCS
   complex_fem.cpp
   convergence.cpp
   datacollection.cpp
+  doftrans.cpp
   eltrans.cpp
   estimators.cpp
   fe.cpp
@@ -124,6 +124,7 @@ set(HDRS
   complex_fem.hpp
   convergence.hpp
   datacollection.hpp
+  doftrans.hpp
   eltrans.hpp
   estimators.hpp
   fe.hpp

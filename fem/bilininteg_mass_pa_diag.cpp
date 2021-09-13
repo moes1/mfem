@@ -343,7 +343,7 @@ void MassIntegrator::AssembleDiagonalPA(Vector &diag)
    {
       ceedOp->GetDiagonal(diag);
    }
-   else if (DeviceCanUseNonDeterministicKernels())
+   else if (Device::FastKernelsEnabled())
    {
       NDK_PAMassAssembleDiagonal(dim, dofs1D, quad1D, ne,
                                  fespace, maps,

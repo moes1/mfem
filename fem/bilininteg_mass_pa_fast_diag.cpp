@@ -18,6 +18,7 @@ using namespace std;
 namespace mfem
 {
 
+// Fast '0' non-deterministic 3D mass diag kernel
 template<int D1D, int Q1D>
 static void NDK_SmemPAMassDiag3D(const int ndofs,
                                  const int NE,
@@ -97,6 +98,8 @@ static void NDK_SmemPAMassDiag3D(const int ndofs,
    });
 }
 
+// Fast non-deterministic 3D mass diag kernel
+// Less smem version with registers
 template<int D1D, int Q1D>
 static void NDK_RegsPAMassDiag3D(const int ndofs,
                                  const int NE,
@@ -227,10 +230,11 @@ void NDK_PAMassAssembleDiagonal(const int dim,
    double *y = Y.ReadWrite();
 
    assert(dim == 3);
-   const int ver = DeviceKernelsVersion();
-   const int id = (ver << 8) | (D1D << 4) | Q1D;
+   const int ver = Device::KernelsVersion();
+   const int vid = (ver << 8) | (D1D << 4) | Q1D;
 
-   switch (id) // orders 1~6
+   // Fast '0' non-deterministic 3D mass diag kernel
+   switch (vid) // orders 1~6
    {
       case 0x023: return NDK_SmemPAMassDiag3D<2,3>(ND,NE,map,b,d,y);
       case 0x024: return NDK_SmemPAMassDiag3D<2,4>(ND,NE,map,b,d,y);
@@ -241,38 +245,25 @@ void NDK_PAMassAssembleDiagonal(const int dim,
       case 0x058: return NDK_SmemPAMassDiag3D<5,8>(ND,NE,map,b,d,y);
       case 0x067: return NDK_SmemPAMassDiag3D<6,7>(ND,NE,map,b,d,y);
       case 0x078: return NDK_SmemPAMassDiag3D<7,8>(ND,NE,map,b,d,y);
-
-      case 0x123:
-      case 0x223:
-      case 0x323: return NDK_RegsPAMassDiag3D<2,3>(ND,NE,map,b,d,y);
-      case 0x124:
-      case 0x224:
-      case 0x324: return NDK_RegsPAMassDiag3D<2,4>(ND,NE,map,b,d,y);
-      case 0x134:
-      case 0x234:
-      case 0x334: return NDK_RegsPAMassDiag3D<3,4>(ND,NE,map,b,d,y);
-      case 0x145:
-      case 0x245:
-      case 0x345: return NDK_RegsPAMassDiag3D<4,5>(ND,NE,map,b,d,y);
-      case 0x146:
-      case 0x246:
-      case 0x346: return NDK_RegsPAMassDiag3D<4,6>(ND,NE,map,b,d,y);
-      case 0x156:
-      case 0x256:
-      case 0x356: return NDK_RegsPAMassDiag3D<5,6>(ND,NE,map,b,d,y);
-      case 0x158:
-      case 0x258:
-      case 0x358: return NDK_RegsPAMassDiag3D<5,8>(ND,NE,map,b,d,y);
-      case 0x167:
-      case 0x267:
-      case 0x367: return NDK_RegsPAMassDiag3D<6,7>(ND,NE,map,b,d,y);
-      case 0x178:
-      case 0x278:
-      case 0x378: return NDK_RegsPAMassDiag3D<7,8>(ND,NE,map,b,d,y);
       default: break;
    }
 
-   MFEM_ABORT("Unknown kernel 0x" << std::hex << id);
+   // all other versions should fold back through these kernels
+   switch ((D1D << 4) | Q1D)
+   {
+      case 0x23: return NDK_RegsPAMassDiag3D<2,3>(ND,NE,map,b,d,y);
+      case 0x24: return NDK_RegsPAMassDiag3D<2,4>(ND,NE,map,b,d,y);
+      case 0x34: return NDK_RegsPAMassDiag3D<3,4>(ND,NE,map,b,d,y);
+      case 0x45: return NDK_RegsPAMassDiag3D<4,5>(ND,NE,map,b,d,y);
+      case 0x46: return NDK_RegsPAMassDiag3D<4,6>(ND,NE,map,b,d,y);
+      case 0x56: return NDK_RegsPAMassDiag3D<5,6>(ND,NE,map,b,d,y);
+      case 0x58: return NDK_RegsPAMassDiag3D<5,8>(ND,NE,map,b,d,y);
+      case 0x67: return NDK_RegsPAMassDiag3D<6,7>(ND,NE,map,b,d,y);
+      case 0x78: return NDK_RegsPAMassDiag3D<7,8>(ND,NE,map,b,d,y);
+      default: break;
+   }
+
+   MFEM_ABORT("Unknown kernel 0x" << std::hex << vid);
 }
 
 } // namespace mfem

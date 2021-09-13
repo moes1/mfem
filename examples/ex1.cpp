@@ -9,6 +9,7 @@
 //               ex1 -m ../data/fichera.mesh
 //               ex1 -m ../data/fichera-mixed.mesh
 //               ex1 -m ../data/toroid-wedge.mesh
+//               ex1 -m ../data/octahedron.mesh -o 1
 //               ex1 -m ../data/periodic-annulus-sector.msh
 //               ex1 -m ../data/periodic-torus-sector.msh
 //               ex1 -m ../data/square-disc-p2.vtk -o 2
@@ -119,8 +120,8 @@ int main(int argc, char *argv[])
    //    largest number that gives a final mesh with no more than 50,000
    //    elements.
    {
-      int ref_levels =
-         (int)floor(log(50000./mesh.GetNE())/log(2.)/dim);
+      const int NE = Device::IsEnabled() ? 1e5 : 50000.;
+      const int ref_levels = (int)floor(log(NE/mesh.GetNE())/log(2.)/dim);
       for (int l = 0; l < ref_levels; l++)
       {
          mesh.UniformRefinement();
@@ -234,7 +235,7 @@ int main(int argc, char *argv[])
          {
             const int myid = 0;
             const int max_it = 50;
-            const int print_lvl = /*-*/1;
+            const int print_lvl = -1;
             const double rtol = 1e-12;
 
             CGSolver cg;

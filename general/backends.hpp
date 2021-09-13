@@ -19,8 +19,6 @@
 #include <library_types.h>
 #include <cuda_runtime.h>
 #include <cuda.h>
-//#include <cuda_runtime_api.h>
-#include <cooperative_groups.h>
 #endif
 #include "cuda.hpp"
 
@@ -48,20 +46,33 @@
 #define MFEM_DEVICE_SYNC
 // MFEM_STREAM_SYNC is used for UVM and MPI GPU-Aware kernels
 #define MFEM_STREAM_SYNC
-#define MFEM_GRID_SYNC
 #endif
 
 #if !((defined(MFEM_USE_CUDA) && defined(__CUDA_ARCH__)) || \
       (defined(MFEM_USE_HIP)  && defined(__HIP_DEVICE_COMPILE__)))
 #define MFEM_SHARED
-#define MFEM_EXTERN_SHARED
-#define MFEM_GRID_SYNC
 #define MFEM_SYNC_THREAD
-#define MFEM_GRID_DIM(k) 1
 #define MFEM_BLOCK_ID(k) 0
 #define MFEM_THREAD_ID(k) 0
 #define MFEM_THREAD_SIZE(k) 1
 #define MFEM_FOREACH_THREAD(i,k,N) for(int i=0; i<N; i++)
+#endif
+
+// 'double' atomicAdd implementation for previous versions of CUDA
+#if defined(MFEM_USE_CUDA) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 600
+MFEM_DEVICE double atomicAdd(double *add, double val)
+{
+   unsigned long long int *ptr = (unsigned long long int *) add;
+   unsigned long long int old = *ptr, reg;
+   do
+   {
+      reg = old;
+      old = atomicCAS(ptr, reg,
+                      __double_as_longlong(val + __longlong_as_double(reg)));
+   }
+   while (reg != old);
+   return __longlong_as_double(old);
+}
 #endif
 
 template <typename T>
