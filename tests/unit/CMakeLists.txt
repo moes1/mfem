@@ -29,6 +29,7 @@ set(UNIT_TESTS_SRCS
   linalg/test_constrainedsolver.cpp
   linalg/test_direct_solvers.cpp
   linalg/test_hypre_ilu.cpp
+  linalg/test_hypre_vector.cpp
   linalg/test_ilu.cpp
   linalg/test_matrix_block.cpp
   linalg/test_matrix_dense.cpp
@@ -54,6 +55,7 @@ set(UNIT_TESTS_SRCS
   fem/test_bilinearform.cpp
   fem/test_blocknonlinearform.cpp
   fem/test_calcshape.cpp
+  fem/test_coefficient.cpp
   fem/test_datacollection.cpp
   fem/test_derefine.cpp
   fem/test_estimator.cpp
@@ -61,6 +63,7 @@ set(UNIT_TESTS_SRCS
   fem/test_face_permutation.cpp
   fem/test_fe.cpp
   fem/test_get_value.cpp
+  fem/test_getderivative.cpp
   fem/test_intrules.cpp
   fem/test_intruletypes.cpp
   fem/test_inversetransform.cpp

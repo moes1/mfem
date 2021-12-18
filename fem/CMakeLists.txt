@@ -32,6 +32,7 @@ set(SRCS
   bilininteg_mass_pa_diag.cpp
   bilininteg_mass_pa_fast.cpp
   bilininteg_mass_pa_fast_amd.cpp
+  bilininteg_mass_pa_fast_hip.cpp
   bilininteg_mass_pa_fast_diag.cpp
   bilininteg_mass_ea.cpp
   bilininteg_transpose_ea.cpp
@@ -47,6 +48,15 @@ set(SRCS
   eltrans.cpp
   estimators.cpp
   fe.cpp
+  fe/fe_base.cpp
+  fe/fe_fixed_order.cpp
+  fe/fe_h1.cpp
+  fe/fe_l2.cpp
+  fe/fe_nd.cpp
+  fe/fe_nurbs.cpp
+  fe/fe_pos.cpp
+  fe/fe_rt.cpp
+  fe/fe_ser.cpp
   fe_coll.cpp
   fespace.cpp
   geom.cpp
@@ -128,6 +138,15 @@ set(HDRS
   eltrans.hpp
   estimators.hpp
   fe.hpp
+  fe/fe_base.hpp
+  fe/fe_fixed_order.hpp
+  fe/fe_h1.hpp
+  fe/fe_l2.hpp
+  fe/fe_nd.hpp
+  fe/fe_nurbs.hpp
+  fe/fe_pos.hpp
+  fe/fe_rt.hpp
+  fe/fe_ser.hpp
   fe_coll.hpp
   fem.hpp
   fespace.hpp
