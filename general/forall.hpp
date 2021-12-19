@@ -65,6 +65,14 @@ const int MAX_Q1D = 14;
                  [&] MFEM_LAMBDA (int i) {__VA_ARGS__},\
                  X,Y,Z)
 
+// MFEM_FORALL with a 3D CUDA block
+#define MFEM_FORALL_3D_launch(i,N,X,Y,Z,...)                    \
+   ForallWrap_launch<3,X,Y,Z>(true,N,                                 \
+                 [=] MFEM_DEVICE (int i) {__VA_ARGS__},  \
+                 [&] MFEM_LAMBDA (int i) {__VA_ARGS__})
+
+
+
 // MFEM_FORALL with a 3D CUDA block and grid
 // With G=0, this is the same as MFEM_FORALL_3D(i,N,X,Y,Z,...)
 #define MFEM_FORALL_3D_GRID(i,N,X,Y,Z,G,...)             \
@@ -470,6 +478,13 @@ void HipKernel3D(const int N, BODY body)
    for (int k = hipBlockIdx_x; k < N; k += hipGridDim_x) { body(k); }
 }
 
+template <const int X,const int Y,const int Z,typename BODY> __launch_bounds__(X*Y*Z) __global__ static
+void HipKernel3D_launch(const int N, BODY body)
+{
+   for (int k = hipBlockIdx_x; k < N; k += hipGridDim_x) { body(k); }
+}
+
+
 template <const int BLCK = MFEM_HIP_BLOCKS, typename DBODY>
 void HipWrap1D(const int N, DBODY &&d_body)
 {
@@ -500,6 +515,17 @@ void HipWrap3D(const int N, DBODY &&d_body,
    hipLaunchKernelGGL(HipKernel3D,GRID,BLCK,0,0,N,d_body);
    MFEM_GPU_CHECK(hipGetLastError());
 }
+
+template <const int X,const int Y,const int Z,typename DBODY>
+void HipWrap3D_launch(const int N, DBODY &&d_body)
+{
+   if (N==0) { return; }
+   const int GRID = N;
+   const dim3 BLCK(X,Y,Z);
+   hipLaunchKernelGGL((HipKernel3D_launch<X,Y,Z>),GRID,BLCK,0,0,N,d_body);
+   MFEM_GPU_CHECK(hipGetLastError());
+}
+
 
 template <int Dim>
 struct HipWrap;
@@ -536,6 +562,16 @@ struct HipWrap<3>
       HipWrap3D(N, d_body, X, Y, Z, G);
    }
 };
+
+
+//template <int Dim,const int X,const int Y,const int Z, typename DBODY>
+//struct HipWrap_launch
+//{
+//   static void run(const int N, DBODY &&d_body, const int G)
+//   {
+//      HipWrap3D_launch<X,Y,Z>(N, d_body);
+//   }
+//};
 
 #endif // MFEM_USE_HIP
 
@@ -611,6 +647,72 @@ backend_cpu:
    for (int k = 0; k < N; k++) { h_body(k); }
 }
 
+/// The forall kernel body wrapper
+template <const int DIM, const int X, const int Y, const int Z,typename DBODY, typename HBODY>
+inline void ForallWrap_launch(const bool use_dev, const int N,
+                       DBODY &&d_body, HBODY &&h_body,
+                       const int G=0)
+{
+   MFEM_CONTRACT_VAR(G);
+   MFEM_CONTRACT_VAR(d_body);
+   if (!use_dev) { goto backend_cpu; }
+
+#if defined(MFEM_USE_RAJA) && defined(RAJA_ENABLE_CUDA)
+   // If Backend::RAJA_CUDA is allowed, use it
+   if (Device::Allows(Backend::RAJA_CUDA))
+   {
+      return RajaCuWrap<DIM>::run(N, d_body, X, Y, Z, G);
+   }
+#endif
+
+#if defined(MFEM_USE_RAJA) && defined(RAJA_ENABLE_HIP)
+   // If Backend::RAJA_HIP is allowed, use it
+   if (Device::Allows(Backend::RAJA_HIP))
+   {
+      return RajaHipWrap<DIM>::run(N, d_body, X, Y, Z, G);
+   }
+#endif
+
+#ifdef MFEM_USE_CUDA
+   // If Backend::CUDA is allowed, use it
+   if (Device::Allows(Backend::CUDA))
+   {
+      return CuWrap<DIM>::run(N, d_body, X, Y, Z, G);
+   }
+#endif
+
+#ifdef MFEM_USE_HIP
+   // If Backend::HIP is allowed, use it
+   if (Device::Allows(Backend::HIP))
+   {
+      return HipWrap3D_launch<X,Y,Z>(N, d_body);
+   }
+#endif
+
+   // If Backend::DEBUG_DEVICE is allowed, use it
+   if (Device::Allows(Backend::DEBUG_DEVICE)) { goto backend_cpu; }
+
+#if defined(MFEM_USE_RAJA) && defined(RAJA_ENABLE_OPENMP)
+   // If Backend::RAJA_OMP is allowed, use it
+   if (Device::Allows(Backend::RAJA_OMP)) { return RajaOmpWrap(N, h_body); }
+#endif
+
+#ifdef MFEM_USE_OPENMP
+   // If Backend::OMP is allowed, use it
+   if (Device::Allows(Backend::OMP)) { return OmpWrap(N, h_body); }
+#endif
+
+#ifdef MFEM_USE_RAJA
+   // If Backend::RAJA_CPU is allowed, use it
+   if (Device::Allows(Backend::RAJA_CPU)) { return RajaSeqWrap(N, h_body); }
+#endif
+
+backend_cpu:
+   // Handle Backend::CPU. This is also a fallback for any allowed backends not
+   // handled above, e.g. OCCA_CPU with configuration 'occa-cpu,cpu', or
+   // OCCA_OMP with configuration 'occa-omp,cpu'.
+   for (int k = 0; k < N; k++) { h_body(k); }
+}
 } // namespace mfem
 
 #endif // MFEM_FORALL_HPP

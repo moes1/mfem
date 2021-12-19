@@ -20,7 +20,7 @@ namespace mfem
 
 // Fast '7' HIP
 template<int D1D, int Q1D, int NBZ=1, int NBK=1> MFEM_GLOBAL static
-//MFEM_LAUNCH_BOUNDS(Q1D*Q1D*NBZ,NBK)
+MFEM_LAUNCH_BOUNDS(Q1D*Q1D*NBZ,NBK)
 void HIP_PAMassApply(const int NE,
                      const int* MAP,
                      const double* B,
@@ -206,19 +206,24 @@ void NDK_HIP_PAMassApply(const int dim,
    const int ver = Device::KernelsVersion();
    const int id = (ver << 8) | (D1D << 4) | Q1D;
 
+   int K=1;
+
    switch (id) // orders 1~8
    {
-      case 0x723: Ker=HIP_PAMassApply<2,3>; break; // 1
-      case 0x734: Ker=HIP_PAMassApply<3,4>; break; // 2
-      case 0x745: Ker=HIP_PAMassApply<4,5>; break; // 3
-      case 0x756: Ker=HIP_PAMassApply<5,6>; break; // 4
-      case 0x767: Ker=HIP_PAMassApply<6,7>; break; // 5
-      case 0x778: Ker=HIP_PAMassApply<7,8>; break; // 6
-      case 0x789: Ker=HIP_PAMassApply<8,9>; break; // 7
-      case 0x79A: Ker=HIP_PAMassApply<9,10>; break; // 8
+      case 0x723: K=7;Ker=HIP_PAMassApply<2,3,7>; break; // 1
+      case 0x734: K=4;Ker=HIP_PAMassApply<3,4,4>; break; // 2
+      case 0x745: K=5;Ker=HIP_PAMassApply<4,5,5>; break; // 3
+      case 0x756: K=7;Ker=HIP_PAMassApply<5,6,7>; break; // 4
+      case 0x767: K=5;Ker=HIP_PAMassApply<6,7,5>; break; // 5
+      case 0x778: K=1;Ker=HIP_PAMassApply<7,8,1>; break; // 6
+      case 0x789: K=3;Ker=HIP_PAMassApply<8,9,3>; break; // 7
+      case 0x79A: K=5;Ker=HIP_PAMassApply<9,10,5>; break; // 8
       default: MFEM_ABORT("Unknown kernel 0x" << std::hex << id << std::dec);
    }
-   MFEM_LAUNCH_KERNEL(Ker,NE,dim3(Q1D,Q1D,1),0,NE,M,B,D,X,Y);
+
+   int grid = (NE-1)/K + 1;
+
+   MFEM_LAUNCH_KERNEL(Ker,grid,dim3(Q1D,Q1D,K),0,NE,M,B,D,X,Y);
 }
 
 } // namespace mfem
